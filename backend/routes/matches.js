@@ -2,6 +2,8 @@ const express = require('express');
 const db = require('../db/database');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { notifyResultSubmitted, notifyMatchFinished } = require('../discord-client');
+const { scheduleBackup } = require('../services/backup');
+const { sendWebhook } = require('../services/webhook');
 
 const router = express.Router();
 
@@ -61,10 +63,20 @@ router.post('/:id/result', requireAuth, async (req, res) => {
       await advanceWinner(matchId, winnerId);
       const winner = await db.get('SELECT name FROM teams WHERE id = ?', [winnerId]);
       notifyMatchFinished(match.team1_name, match.team2_name, updated.team1_score, updated.team2_score, winner.name, match.round, false);
+      sendWebhook('match_finished', {
+        mecz: `${match.team1_name} vs ${match.team2_name}`,
+        wynik: `${updated.team1_score}:${updated.team2_score}`,
+        zwycięzca: winner.name, runda: match.round
+      });
     } else {
       const submitter = isTeam1Rep ? match.team1_name : match.team2_name;
       notifyResultSubmitted(match.team1_name, match.team2_name, team1_score, team2_score, submitter);
+      sendWebhook('result_submitted', {
+        mecz: `${match.team1_name} vs ${match.team2_name}`,
+        wynik: `${team1_score}:${team2_score}`, zgłosił: submitter
+      });
     }
+    scheduleBackup('auto');
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Błąd serwera' });
@@ -91,6 +103,12 @@ router.post('/:id/admin-result', requireAdmin, async (req, res) => {
     await advanceWinner(matchId, winnerId);
     const winner = await db.get('SELECT name FROM teams WHERE id = ?', [winnerId]);
     notifyMatchFinished(match.team1_name, match.team2_name, team1_score, team2_score, winner.name, match.round, true);
+    sendWebhook('match_finished', {
+      mecz: `${match.team1_name} vs ${match.team2_name}`,
+      wynik: `${team1_score}:${team2_score}`,
+      zwycięzca: winner.name, runda: match.round, tryb: 'admin'
+    });
+    scheduleBackup('auto');
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Błąd serwera' });

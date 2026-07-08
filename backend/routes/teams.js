@@ -5,6 +5,9 @@ const {
   notifyTeamRegistered, notifyJoinRequest, notifyMemberJoined,
   notifyMemberLeft, notifyMemberKicked
 } = require('../discord-client');
+const { scheduleBackup } = require('../services/backup');
+const { sendWebhook } = require('../services/webhook');
+const { logAction } = require('../services/audit');
 
 const router = express.Router();
 
@@ -68,6 +71,9 @@ router.post('/', requireAuth, async (req, res) => {
     const team = await db.get('SELECT * FROM teams WHERE id = ?', [result.lastInsertRowid]);
     const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
     notifyTeamRegistered(name, user.username);
+    sendWebhook('team_registered', { drużyna: name, kapitan: user.username });
+    logAction(user, 'team_registered', `${isSolo ? 'Zawodnik' : 'Drużyna'}: ${name}`);
+    scheduleBackup('auto');
     res.json(team);
   } catch (err) {
     if (err.message?.includes('UNIQUE')) return res.status(400).json({ error: 'Ta nazwa jest już zajęta' });
@@ -88,6 +94,7 @@ router.post('/:id/join', requireAuth, async (req, res) => {
     await db.run('INSERT INTO team_members (team_id, user_id, status) VALUES (?, ?, ?)', [teamId, userId, 'pending']);
     const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
     notifyJoinRequest(user.username, team.name);
+    scheduleBackup('auto');
     res.json({ success: true });
   } catch {
     res.status(400).json({ error: 'Nie możesz dołączyć do tej drużyny' });
@@ -106,9 +113,11 @@ router.post('/:id/members/:userId/respond', requireAuth, async (req, res) => {
       await db.run("UPDATE team_members SET status = 'accepted' WHERE team_id = ? AND user_id = ?", [teamId, userId]);
       const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
       notifyMemberJoined(user.username, team.name);
+      sendWebhook('member_joined', { gracz: user.username, drużyna: team.name });
     } else {
       await db.run('DELETE FROM team_members WHERE team_id = ? AND user_id = ?', [teamId, userId]);
     }
+    scheduleBackup('auto');
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Błąd serwera' });
@@ -131,6 +140,7 @@ router.post('/:id/leave', requireAuth, async (req, res) => {
     await db.run('DELETE FROM team_members WHERE team_id = ? AND user_id = ?', [teamId, userId]);
     const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
     notifyMemberLeft(user.username, team.name);
+    scheduleBackup('auto');
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Błąd serwera' });
@@ -151,6 +161,8 @@ router.post('/:id/members/:userId/kick', requireAuth, async (req, res) => {
     await db.run('DELETE FROM team_members WHERE team_id = ? AND user_id = ?', [teamId, userId]);
     const kicked = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
     notifyMemberKicked(kicked?.username, team.name);
+    sendWebhook('member_kicked', { gracz: kicked?.username, drużyna: team.name });
+    scheduleBackup('auto');
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Błąd serwera' });
@@ -168,6 +180,8 @@ router.delete('/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Brak uprawnień' });
     await db.run('DELETE FROM team_members WHERE team_id = ?', [teamId]);
     await db.run('DELETE FROM teams WHERE id = ?', [teamId]);
+    logAction(req.session.user, 'team_deleted', `Usunięto drużynę: ${team.name}`);
+    scheduleBackup('auto');
     res.json({ success: true });
   } catch {
     res.status(500).json({ error: 'Błąd serwera' });

@@ -63,7 +63,7 @@ router.post('/logout', (req, res) => {
 router.get('/me', async (req, res) => {
   if (!req.session.user) return res.json({ user: null });
   try {
-    const user = await db.get('SELECT id, username, avatar, is_admin FROM users WHERE id = ?', [req.session.user.id]);
+    const user = await db.get('SELECT id, username, avatar, is_admin, title, accent_color FROM users WHERE id = ?', [req.session.user.id]);
     res.json({ user: user || null });
   } catch {
     res.json({ user: null });

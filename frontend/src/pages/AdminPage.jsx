@@ -14,15 +14,20 @@ export default function AdminPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [newAdminId, setNewAdminId] = useState('');
-  const [form, setForm] = useState({ max_teams: '', tournament_name: '', discord_channel_id: '', mode: 'teams' });
+  const [form, setForm] = useState({ max_teams: '', tournament_name: '', discord_channel_id: '', mode: 'teams', webhook_url: '', backup_channel_id: '', auto_backup_enabled: true });
   const [expandedUser, setExpandedUser] = useState(null);
+  const [backupStatus, setBackupStatus] = useState({});
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [backupBusy, setBackupBusy] = useState(false);
 
   const fetchData = () => {
     Promise.all([
       fetch('/api/admin/settings', { credentials: 'include' }).then(r => r.json()),
       fetch('/api/admin/users', { credentials: 'include' }).then(r => r.json()),
       fetch('/api/teams', { credentials: 'include' }).then(r => r.json()),
-    ]).then(([settingsData, usersData, teamsData]) => {
+      fetch('/api/admin/backup/status', { credentials: 'include' }).then(r => r.json()).catch(() => ({})),
+      fetch('/api/admin/audit-log', { credentials: 'include' }).then(r => r.json()).catch(() => []),
+    ]).then(([settingsData, usersData, teamsData, backupStatusData, auditLogData]) => {
       const settingsMap = {};
       settingsData.settings?.forEach(s => { settingsMap[s.key] = s.value; });
       setSettings(settingsMap);
@@ -34,8 +39,13 @@ export default function AdminPage() {
         max_teams: settingsMap.max_teams || '8',
         tournament_name: settingsMap.tournament_name || '',
         discord_channel_id: settingsMap.discord_channel_id || '',
-        mode: settingsMap.mode === 'solo' ? 'solo' : 'teams'
+        mode: settingsMap.mode === 'solo' ? 'solo' : 'teams',
+        webhook_url: settingsMap.webhook_url || '',
+        backup_channel_id: settingsMap.backup_channel_id || '',
+        auto_backup_enabled: settingsMap.auto_backup_enabled !== '0',
       });
+      setBackupStatus(backupStatusData || {});
+      setAuditLogs(Array.isArray(auditLogData) ? auditLogData : []);
       setLoading(false);
     }).catch(() => setLoading(false));
   };
@@ -96,6 +106,39 @@ export default function AdminPage() {
     const res = await fetch(`/api/admin/admins/${userId}`, { method: 'DELETE', credentials: 'include' });
     if (res.ok) fetchData();
     else { const d = await res.json(); setError(d.error); }
+  };
+
+  const runBackupNow = async () => {
+    setError(''); setSuccess(''); setBackupBusy(true);
+    try {
+      const res = await fetch('/api/admin/backup/run', { method: 'POST', credentials: 'include' });
+      const data = await res.json();
+      if (res.ok) { setSuccess('Kopia zapasowa wysłana na Discord! 💾'); fetchData(); }
+      else setError(data.error);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const restoreBackup = async () => {
+    if (!window.confirm('UWAGA: To NADPISZE obecne dane danymi z ostatniej kopii zapasowej na Discordzie. Kontynuować?')) return;
+    setError(''); setSuccess(''); setBackupBusy(true);
+    try {
+      const res = await fetch('/api/admin/backup/restore', { method: 'POST', credentials: 'include' });
+      const data = await res.json();
+      if (res.ok) { setSuccess('Dane przywrócone z Discorda! Odśwież stronę, aby zobaczyć zmiany.'); fetchData(); }
+      else setError(data.error);
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const testWebhook = async () => {
+    setError(''); setSuccess('');
+    const res = await fetch('/api/admin/webhook/test', { method: 'POST', credentials: 'include' });
+    const data = await res.json();
+    if (res.ok) setSuccess('Testowe powiadomienie wysłane! Sprawdź webhook.');
+    else setError(data.error);
   };
 
   const kickFromTeam = async (teamId, userId, username) => {
@@ -209,6 +252,14 @@ export default function AdminPage() {
                 Kliknij prawym na kanał → Kopiuj ID (włącz tryb dewelopera w DC)
               </span>
             </div>
+            <div className="form-group">
+              <label>Webhook URL (dodatkowe powiadomienia)</label>
+              <input className="input" value={form.webhook_url} placeholder="np. https://discord.com/api/webhooks/..."
+                onChange={e => setForm(f => ({ ...f, webhook_url: e.target.value }))} />
+              <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>
+                Discord Webhook lub dowolny endpoint HTTP (Slack, Zapier, n8n, własny serwer...)
+              </span>
+            </div>
             <button className="btn btn-primary" onClick={saveSettings}>💾 Zapisz ustawienia</button>
           </div>
         </div>
@@ -237,6 +288,78 @@ export default function AdminPage() {
             </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* 💾 Kopie zapasowe — ochrona przed utratą danych na darmowym hostingu */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <div className="section-title">💾 Kopie zapasowe na Discordzie</div>
+        <p style={{ color: 'var(--text2)', fontSize: '0.875rem', marginTop: '0.5rem' }}>
+          Darmowy hosting (np. Render) potrafi wyzerować dysk po restarcie serwisu. Żeby temu zapobiec,
+          cały stan turnieju (użytkownicy, drużyny, mecze, ustawienia) jest automatycznie wysyłany jako
+          plik na wskazany kanał Discord — a przy starcie serwera, jeśli baza jest pusta, aplikacja
+          sama odtwarza ostatnią kopię. Nie musisz nic robić ręcznie, ale poniżej masz też pełną kontrolę.
+        </p>
+        <div className="form-group" style={{ marginTop: '1rem' }}>
+          <label>Discord Channel ID dla kopii zapasowych (opcjonalnie)</label>
+          <input className="input" value={form.backup_channel_id} placeholder="puste = użyje kanału powiadomień"
+            onChange={e => setForm(f => ({ ...f, backup_channel_id: e.target.value }))} />
+          <span style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>
+            Zalecany osobny, prywatny kanał widoczny tylko dla adminów — pliki backupu zawierają dane użytkowników.
+          </span>
+        </div>
+        <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.6rem' }}>
+          <input
+            type="checkbox" id="auto_backup" checked={form.auto_backup_enabled}
+            onChange={e => setForm(f => ({ ...f, auto_backup_enabled: e.target.checked }))}
+            style={{ width: 'auto' }}
+          />
+          <label htmlFor="auto_backup" style={{ marginBottom: 0 }}>Automatyczny backup włączony (po ważnych akcjach + co 15 min)</label>
+        </div>
+        <button className="btn btn-primary" onClick={saveSettings} style={{ marginBottom: '1rem' }}>💾 Zapisz ustawienia backupu</button>
+
+        <div style={{ background: 'var(--bg3)', borderRadius: '8px', padding: '1rem', display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text2)' }}>
+            <div>Ostatni backup: <strong style={{ color: 'var(--text)' }}>{backupStatus.last_backup_at ? new Date(backupStatus.last_backup_at).toLocaleString('pl-PL') : 'nigdy'}</strong></div>
+            <div>Ostatnie przywrócenie: <strong style={{ color: 'var(--text)' }}>{backupStatus.last_restore_at ? new Date(backupStatus.last_restore_at).toLocaleString('pl-PL') : 'nigdy'}</strong></div>
+          </div>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button className="btn btn-success" onClick={runBackupNow} disabled={backupBusy}>💾 Backup teraz</button>
+            <button className="btn btn-danger" onClick={restoreBackup} disabled={backupBusy}>♻️ Przywróć z Discorda</button>
+            <button className="btn btn-ghost" onClick={testWebhook}>🔔 Testuj webhook</button>
+          </div>
+        </div>
+      </div>
+
+      {/* 📜 Dziennik aktywności */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <div className="section-title">📜 Dziennik aktywności ({auditLogs.length})</div>
+        <div className="table-wrap" style={{ marginTop: '0.75rem', maxHeight: 320, overflowY: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Kiedy</th>
+                <th>Kto</th>
+                <th>Akcja</th>
+                <th>Szczegóły</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auditLogs.length === 0 && (
+                <tr><td colSpan={4} style={{ color: 'var(--text3)', padding: '0.75rem' }}>Brak zdarzeń</td></tr>
+              )}
+              {auditLogs.map(log => (
+                <tr key={log.id}>
+                  <td style={{ color: 'var(--text2)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                    {new Date(log.created_at).toLocaleString('pl-PL')}
+                  </td>
+                  <td style={{ fontWeight: 500 }}>{log.actor_username || 'System'}</td>
+                  <td><span className="badge badge-blue" style={{ fontSize: '0.72rem' }}>{log.action}</span></td>
+                  <td style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>{log.details}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

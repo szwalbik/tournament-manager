@@ -101,6 +101,97 @@ Frontend działa na: http://localhost:3000
 
 ---
 
+## 💾 Trwałość danych na darmowym hostingu (backup na Discord)
+
+Problem: na darmowych planach (Render, Railway itp.) dysk serwera bywa
+**nietrwały** — po usypianiu/restarcie/redeployu plik `tournament.db` może
+zostać wyzerowany, a razem z nim wszystkie drużyny, mecze, konta i uprawnienia
+administratorów.
+
+Rozwiązanie wbudowane w aplikację: **automatyczny backup na Discord**.
+
+Jak to działa:
+1. W panelu Admin → sekcja "💾 Kopie zapasowe na Discordzie" wklej **Channel ID**
+   kanału, na który bot ma wysyłać kopie zapasowe (najlepiej osobny, prywatny
+   kanał widoczny tylko dla adminów — plik backupu zawiera dane użytkowników).
+   Jeśli zostawisz puste, użyty zostanie kanał powiadomień.
+2. Po każdej ważnej akcji (rejestracja drużyny, wynik meczu, zmiana ustawień,
+   dodanie admina itd.) oraz co 15 minut w tle, aplikacja eksportuje **cały
+   stan bazy danych** do pliku JSON i wysyła go jako załącznik na ten kanał.
+3. Gdy serwer wystartuje i wykryje **pustą bazę** (czyli świeży/wyzerowany
+   dysk po restarcie), automatycznie pobiera najnowszy plik z tego kanału
+   i odtwarza wszystkie dane — bez żadnej akcji z Twojej strony.
+4. W panelu Admin masz też przyciski **"Backup teraz"** (ręczna kopia) oraz
+   **"Przywróć z Discorda"** (ręczne odtworzenie — nadpisuje bieżące dane).
+
+Dzięki temu najgorszy możliwy scenariusz to utrata zmian z ostatnich
+kilkunastu minut — a nie całego turnieju.
+
+> Backup wymaga zalogowanego bota Discord (`DISCORD_BOT_TOKEN` w `.env`),
+> więc jeśli już korzystasz z powiadomień Discord, nic dodatkowego nie
+> musisz konfigurować poza wskazaniem kanału.
+
+### 🏓 Ograniczenie usypiania serwisu (keep-alive)
+
+Dodatkowo, jeśli w zmiennych środowiskowych ustawisz `SELF_URL` (adres, pod
+którym działa Twoja aplikacja, np. `https://twoja-nazwa.onrender.com`),
+backend będzie co 4 minuty odpytywał sam siebie o `/health`. Na Render ten
+adres jest zwykle dostępny automatycznie jako `RENDER_EXTERNAL_URL`, więc
+zazwyczaj **nie musisz nic dodatkowo ustawiać** na tej platformie — backend
+wykryje go sam. To nie gwarantuje 100% dostępności (darmowe plany mają też
+twarde limity godzin miesięcznie), ale znacznie ogranicza częstotliwość
+usypiania i restartów.
+
+---
+
+## 🔔 Powiadomienia webhookowe
+
+Oprócz bota Discord (który wymaga tokenu i zaproszenia na serwer), aplikacja
+wspiera też prostsze **powiadomienia przez webhook** — przydatne, jeśli
+chcesz podpiąć powiadomienia do innego kanału/serwera Discord bez własnego
+bota, albo do Slacka, Zapiera, n8n czy własnego serwera.
+
+1. W panelu Admin → pole **"Webhook URL"** wklej:
+   - **Discord Webhook** (Ustawienia kanału → Integracje → Webhooki → Nowy
+     webhook → Kopiuj URL) — aplikacja sama rozpozna ten format i wyśle
+     ładny embed, albo
+   - dowolny **inny adres HTTP** — aplikacja wyśle generyczny JSON
+     (`{ event, label, data, timestamp }`), który możesz przetworzyć po
+     swojej stronie.
+2. Kliknij "Zapisz ustawienia", a następnie przycisk **"🔔 Testuj webhook"**,
+   żeby sprawdzić, czy wszystko działa.
+
+Webhook jest wywoływany równolegle z powiadomieniami bota przy: rejestracji
+drużyny, dołączeniu/wyrzuceniu gracza, starcie turnieju, zgłoszeniu i
+zatwierdzeniu wyniku, dodaniu administratora, zmianie ustawień oraz backupie.
+
+---
+
+## 🪪 Profil użytkownika ("w charakterze")
+
+Każdy zalogowany użytkownik ma teraz zakładkę **"🪪 Profil"**, gdzie może
+dodać własny charakter do swojego konta:
+- **Tytuł/przydomek** (np. "Legenda Areny", "Mistrz Serwisu"),
+- **Opis postaci** (dowolny tekst, do 500 znaków),
+- **Kolor motywu** (podświetla nazwę użytkownika w pasku nawigacji),
+- **Dowolne własne pola** (do 8 par etykieta–wartość, np. "Klan: Czerwoni",
+  "Broń: Forehand loop") — mini "karta postaci" dla graczy, którzy chcą
+  dodać coś więcej niż tylko nazwę z Discorda.
+
+Dane profilu są częścią bazy danych, więc są też objęte systemem kopii
+zapasowych opisanym wyżej.
+
+---
+
+## 📜 Dziennik aktywności (Audit Log)
+
+Panel Admin zawiera teraz sekcję **"📜 Dziennik aktywności"**, pokazującą
+ostatnie ważne akcje w systemie: kto i kiedy dodał/usunął administratora,
+zresetował turniej, usunął drużynę, rozpoczął turniej, zmienił ustawienia
+itd. Ułatwia to rozliczanie się z decyzji, gdy adminów jest kilku.
+
+---
+
 ## Przepływ turnieju
 
 ```
@@ -156,8 +247,16 @@ bez problemów z CORS i cookies między różnymi domenami.
 
 Plik `tournament.db` leży na dysku serwera. Na darmowym planie Render
 dysk **nie jest trwały** — dane mogą się wyzerować po restarcie lub
-redeployu. Do testów/małego turnieju wystarczy, ale jeśli zależy Ci na
-trwałości danych, rozważ:
+redeployu.
+
+**To ryzyko jest już zaadresowane** przez wbudowany system automatycznego
+backupu na Discord — patrz sekcja [💾 Trwałość danych na darmowym
+hostingu](#-trwałość-danych-na-darmowym-hostingu-backup-na-discord) wyżej.
+W skrócie: skonfiguruj kanał backupu w panelu Admina, a aplikacja sama
+zadba o to, żeby żaden restart nie skasował Ci turnieju.
+
+Jeśli mimo to wolisz podejście "klasyczne" (trwały dysk zamiast backupu na
+Discord), nadal możesz rozważyć:
 - płatny "Persistent Disk" na Render, albo
 - przejście na hostowaną bazę (np. darmowy plan Postgres na Render/Neon).
 
@@ -171,28 +270,36 @@ proces wdrożenia), **VPS z PM2 + nginx** (pełna kontrola, dysk trwały).
 ```
 tournament-manager/
 ├── backend/
-│   ├── index.js              # Serwer Express + bot Discord
-│   ├── discord-client.js     # Singleton klienta Discord
+│   ├── index.js              # Serwer Express + bot Discord + keep-alive/shutdown
+│   ├── discord-client.js     # Singleton klienta Discord (embed, pliki, backup)
 │   ├── .env.example          # Szablon konfiguracji
 │   ├── db/
-│   │   └── database.js       # SQLite schema i inicjalizacja
+│   │   └── database.js       # SQLite schema, migracje i inicjalizacja
 │   ├── middleware/
 │   │   └── auth.js           # requireAuth, requireAdmin
+│   ├── services/
+│   │   ├── backup.js         # Eksport/import + backup-restore na Discord
+│   │   ├── webhook.js        # Generyczne powiadomienia webhookowe
+│   │   └── audit.js          # Dziennik aktywności (audit log)
 │   └── routes/
 │       ├── auth.js           # Discord OAuth2
 │       ├── teams.js          # Drużyny i dołączanie
 │       ├── matches.js        # Mecze i wyniki
-│       └── admin.js          # Panel admina
+│       ├── admin.js          # Panel admina, backup, webhook, audit log
+│       ├── public.js         # Publiczne ustawienia turnieju
+│       └── profile.js        # Profil użytkownika ("w charakterze")
 ├── frontend/
 │   └── src/
-│       ├── App.js            # Router, NavBar
-│       ├── App.css           # Style globalne
+│       ├── App.jsx            # Router, NavBar
+│       ├── App.css            # Style globalne
 │       ├── context/
-│       │   └── AuthContext.js
+│       │   ├── AuthContext.jsx
+│       │   └── TournamentContext.jsx
 │       └── pages/
-│           ├── HomePage.js   # Tabela wyników, aktywne mecze
-│           ├── BracketPage.js # Drabinka turniejowa
-│           ├── TeamsPage.js   # Zarządzanie drużynami
-│           └── AdminPage.js   # Panel admina
+│           ├── HomePage.jsx   # Tabela wyników, aktywne mecze
+│           ├── BracketPage.jsx # Drabinka turniejowa
+│           ├── TeamsPage.jsx   # Zarządzanie drużynami
+│           ├── AdminPage.jsx   # Panel admina (+ backup, webhook, audit log)
+│           └── ProfilePage.jsx # Profil użytkownika
 └── README.md
 ```

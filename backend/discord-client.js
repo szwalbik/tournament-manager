@@ -1,4 +1,4 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
 
 let discordClient = null;
 let channelId = null;
@@ -9,6 +9,56 @@ function setDiscordClient(client) {
 
 function setChannelId(id) {
   channelId = id;
+}
+
+// Udostępnia surowego klienta Discord (np. modułowi backupu, żeby mógł
+// pobrać dowolny kanał, niekoniecznie ten od powiadomień).
+function getClient() {
+  return discordClient;
+}
+
+function isBotReady() {
+  return !!(discordClient && discordClient.isReady && discordClient.isReady());
+}
+
+// 📎 Wysyła dowolny plik (Buffer) jako załącznik na wskazany kanał.
+// Używane przez system automatycznych kopii zapasowych.
+async function sendFileToChannel(targetChannelId, buffer, filename, content) {
+  if (!discordClient || !targetChannelId) return { ok: false, error: 'Bot lub kanał nieskonfigurowany' };
+  try {
+    const channel = await discordClient.channels.fetch(targetChannelId);
+    if (!channel) return { ok: false, error: 'Nie znaleziono kanału' };
+    const attachment = new AttachmentBuilder(buffer, { name: filename });
+    const message = await channel.send({ content, files: [attachment] });
+    return { ok: true, messageId: message.id };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+}
+
+// 📥 Pobiera najnowszy plik kopii zapasowej z kanału (wysłany przez bota tej appki).
+async function fetchLatestBackupFile(targetChannelId, filePrefix) {
+  if (!discordClient || !targetChannelId) return { ok: false, error: 'Bot lub kanał nieskonfigurowany' };
+  try {
+    const channel = await discordClient.channels.fetch(targetChannelId);
+    if (!channel) return { ok: false, error: 'Nie znaleziono kanału' };
+    const messages = await channel.messages.fetch({ limit: 50 });
+    const withBackup = [...messages.values()]
+      .filter(m => m.author?.id === discordClient.user?.id)
+      .map(m => ({ msg: m, attachment: [...m.attachments.values()].find(a => a.name?.startsWith(filePrefix)) }))
+      .filter(x => x.attachment)
+      .sort((a, b) => b.msg.createdTimestamp - a.msg.createdTimestamp);
+
+    if (withBackup.length === 0) return { ok: false, error: 'Brak plików kopii zapasowej na tym kanale' };
+
+    const latest = withBackup[0];
+    const res = await fetch(latest.attachment.url);
+    if (!res.ok) return { ok: false, error: `Nie udało się pobrać pliku (${res.status})` };
+    const text = await res.text();
+    return { ok: true, text, createdAt: latest.msg.createdAt };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
 }
 
 // Kolory embedów
@@ -156,6 +206,10 @@ async function sendDiscordNotification(message) {
 module.exports = {
   setDiscordClient,
   setChannelId,
+  getClient,
+  isBotReady,
+  sendFileToChannel,
+  fetchLatestBackupFile,
   sendDiscordNotification,
   notifyTeamRegistered,
   notifyJoinRequest,

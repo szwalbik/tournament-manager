@@ -16,8 +16,28 @@ sqlite.serialize(() => {
     discriminator TEXT,
     avatar TEXT,
     is_admin INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    title TEXT DEFAULT '',
+    bio TEXT DEFAULT '',
+    accent_color TEXT DEFAULT '',
+    custom_fields TEXT DEFAULT '[]'
   )`);
+
+  // --- Migracje: dołóż kolumny do już istniejących baz (np. wgranych z backupu) ---
+  // SQLite nie wspiera "ADD COLUMN IF NOT EXISTS", więc łapiemy błąd "duplicate column".
+  const profileMigrations = [
+    "ALTER TABLE users ADD COLUMN title TEXT DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN accent_color TEXT DEFAULT ''",
+    "ALTER TABLE users ADD COLUMN custom_fields TEXT DEFAULT '[]'",
+  ];
+  profileMigrations.forEach(sql => {
+    sqlite.run(sql, [], (err) => {
+      if (err && !/duplicate column/i.test(err.message)) {
+        console.warn('Migracja nieudana:', sql, err.message);
+      }
+    });
+  });
 
   sqlite.run(`CREATE TABLE IF NOT EXISTS teams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,11 +89,27 @@ sqlite.serialize(() => {
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
+  sqlite.run(`CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id TEXT,
+    actor_username TEXT,
+    action TEXT NOT NULL,
+    details TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`);
+
   sqlite.run(`INSERT OR IGNORE INTO tournament_status (id, phase) VALUES (1, 'registration')`);
   sqlite.run(`INSERT OR IGNORE INTO tournament_settings (key, value) VALUES ('max_teams', '8')`);
   sqlite.run(`INSERT OR IGNORE INTO tournament_settings (key, value) VALUES ('tournament_name', 'Turniej Ping-Ponga')`);
   sqlite.run(`INSERT OR IGNORE INTO tournament_settings (key, value) VALUES ('discord_channel_id', '')`);
   sqlite.run(`INSERT OR IGNORE INTO tournament_settings (key, value) VALUES ('mode', 'teams')`);
+  // 🔔 Powiadomienia webhookowe (Discord webhook URL lub dowolny generyczny endpoint HTTP)
+  sqlite.run(`INSERT OR IGNORE INTO tournament_settings (key, value) VALUES ('webhook_url', '')`);
+  // 💾 Automatyczne kopie zapasowe na Discord (kanał, na który bot wysyła plik z pełnym stanem bazy)
+  sqlite.run(`INSERT OR IGNORE INTO tournament_settings (key, value) VALUES ('backup_channel_id', '')`);
+  sqlite.run(`INSERT OR IGNORE INTO tournament_settings (key, value) VALUES ('auto_backup_enabled', '1')`);
+  sqlite.run(`INSERT OR IGNORE INTO tournament_settings (key, value) VALUES ('last_backup_at', '')`);
+  sqlite.run(`INSERT OR IGNORE INTO tournament_settings (key, value) VALUES ('last_restore_at', '')`);
 });
 
 // Promisified helpers so routes can use async/await
@@ -91,6 +127,10 @@ const db = {
     });
   }),
   serialize: (fn) => sqlite.serialize(fn),
+  exec: (sql) => new Promise((resolve, reject) => {
+    sqlite.exec(sql, (err) => err ? reject(err) : resolve());
+  }),
+  dbPath,
 };
 
 module.exports = db;

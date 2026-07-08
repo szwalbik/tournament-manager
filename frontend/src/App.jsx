@@ -6,6 +6,7 @@ import HomePage from './pages/HomePage.jsx';
 import TeamsPage from './pages/TeamsPage.jsx';
 import BracketPage from './pages/BracketPage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
+import ProfilePage from './pages/ProfilePage.jsx';
 import './App.css';
 
 function NavBar() {
@@ -27,13 +28,14 @@ function NavBar() {
         <Link to="/" className={location.pathname === '/' ? 'nav-link active' : 'nav-link'}>Tabela</Link>
         <Link to="/bracket" className={location.pathname === '/bracket' ? 'nav-link active' : 'nav-link'}>Drabinka</Link>
         {user && <Link to="/teams" className={location.pathname === '/teams' ? 'nav-link active' : 'nav-link'}>{isSolo ? 'Zawodnicy' : 'Drużyny'}</Link>}
+        {user && <Link to="/profile" className={location.pathname === '/profile' ? 'nav-link active' : 'nav-link'}>🪪 Profil</Link>}
         {user?.is_admin && <Link to="/admin" className={location.pathname === '/admin' ? 'nav-link active nav-admin' : 'nav-link nav-admin'}>⚙️ Admin</Link>}
       </div>
       <div className="navbar-auth">
         {user ? (
           <div className="user-info">
             <img src={avatarUrl} alt="" className="user-avatar" />
-            <span className="user-name">{user.username}</span>
+            <span className="user-name" style={user.accent_color ? { color: user.accent_color } : undefined}>{user.username}</span>
             {user.is_admin && <span className="admin-badge">ADMIN</span>}
             <button onClick={logout} className="btn-logout">Wyloguj</button>
           </div>
@@ -62,6 +64,7 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/bracket" element={<BracketPage />} />
                 <Route path="/teams" element={<TeamsPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/admin" element={<AdminPage />} />
               </Routes>
             </main>
