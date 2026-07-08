@@ -208,7 +208,7 @@ router.post('/start', requireAdmin, async (req, res) => {
     }));
 
     notifyTournamentStart(nameSetting?.value || 'Turniej', pairs);
-    sendWebhook('tournament_started', { turniej: nameSetting?.value || 'Turniej', drużyny: shuffled.length, rundy: totalRounds });
+    sendWebhook('tournament_started', { turniej: nameSetting?.value || 'Turniej', drużyny: shuffled.length, rundy: totalRounds, pary: pairs });
     await logAction(req.session.user, 'tournament_started', `Rozpoczęto turniej, ${shuffled.length} drużyn/zawodników, ${totalRounds} rund`);
     scheduleBackup('auto');
     res.json({ success: true, rounds: totalRounds });

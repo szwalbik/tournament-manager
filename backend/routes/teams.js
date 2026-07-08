@@ -94,6 +94,7 @@ router.post('/:id/join', requireAuth, async (req, res) => {
     await db.run('INSERT INTO team_members (team_id, user_id, status) VALUES (?, ?, ?)', [teamId, userId, 'pending']);
     const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
     notifyJoinRequest(user.username, team.name);
+    sendWebhook('join_request', { gracz: user.username, drużyna: team.name });
     scheduleBackup('auto');
     res.json({ success: true });
   } catch {
@@ -140,6 +141,7 @@ router.post('/:id/leave', requireAuth, async (req, res) => {
     await db.run('DELETE FROM team_members WHERE team_id = ? AND user_id = ?', [teamId, userId]);
     const user = await db.get('SELECT username FROM users WHERE id = ?', [userId]);
     notifyMemberLeft(user.username, team.name);
+    sendWebhook('member_left', { gracz: user.username, drużyna: team.name });
     scheduleBackup('auto');
     res.json({ success: true });
   } catch {
