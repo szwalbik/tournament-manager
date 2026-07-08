@@ -20,7 +20,8 @@ sqlite.serialize(() => {
     title TEXT DEFAULT '',
     bio TEXT DEFAULT '',
     accent_color TEXT DEFAULT '',
-    custom_fields TEXT DEFAULT '[]'
+    custom_fields TEXT DEFAULT '[]',
+    full_name TEXT DEFAULT ''
   )`);
 
   // --- Migracje: dołóż kolumny do już istniejących baz (np. wgranych z backupu) ---
@@ -30,6 +31,8 @@ sqlite.serialize(() => {
     "ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN accent_color TEXT DEFAULT ''",
     "ALTER TABLE users ADD COLUMN custom_fields TEXT DEFAULT '[]'",
+    // Imię i nazwisko — wyświetlane zamiast nicku (nick zostaje widoczny pod spodem)
+    "ALTER TABLE users ADD COLUMN full_name TEXT DEFAULT ''",
   ];
   profileMigrations.forEach(sql => {
     sqlite.run(sql, [], (err) => {

@@ -12,7 +12,7 @@ router.get('/settings', requireAdmin, async (req, res) => {
   try {
     const settings = await db.all('SELECT * FROM tournament_settings');
     const status = await db.get('SELECT * FROM tournament_status WHERE id = 1');
-    const adminUsers = await db.all('SELECT id, username, avatar FROM users WHERE is_admin = 1');
+    const adminUsers = await db.all('SELECT id, username, avatar, full_name FROM users WHERE is_admin = 1');
     res.json({ settings, status, adminUsers });
   } catch {
     res.status(500).json({ error: 'Błąd serwera' });
@@ -276,7 +276,7 @@ router.post('/demo', requireAdmin, async (req, res) => {
 
 router.get('/users', requireAdmin, async (req, res) => {
   try {
-    const users = await db.all('SELECT id, username, avatar, is_admin, created_at FROM users ORDER BY created_at ASC');
+    const users = await db.all('SELECT id, username, avatar, is_admin, created_at, full_name FROM users ORDER BY created_at ASC');
     res.json(users);
   } catch {
     res.status(500).json({ error: 'Błąd serwera' });

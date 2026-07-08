@@ -10,6 +10,7 @@ const MAX_LABEL_LEN = 30;
 const MAX_VALUE_LEN = 200;
 const MAX_BIO_LEN = 500;
 const MAX_TITLE_LEN = 60;
+const MAX_FULL_NAME_LEN = 80;
 const ALLOWED_COLORS = null; // dowolny poprawny hex, walidowany regexem poniżej
 
 function parseCustomFields(raw) {
@@ -33,6 +34,7 @@ function serializeUserProfile(user) {
     bio: user.bio || '',
     accent_color: user.accent_color || '',
     custom_fields: parseCustomFields(user.custom_fields),
+    full_name: user.full_name || '',
   };
 }
 
@@ -49,8 +51,11 @@ router.get('/me', requireAuth, async (req, res) => {
 
 // ✏️ Aktualizacja własnego profilu — tytuł/opis "postaci" i dowolne pola własne
 router.put('/me', requireAuth, async (req, res) => {
-  const { title, bio, accent_color, custom_fields } = req.body;
+  const { title, bio, accent_color, custom_fields, full_name } = req.body;
   try {
+    if (full_name !== undefined && String(full_name).length > MAX_FULL_NAME_LEN) {
+      return res.status(400).json({ error: `Imię i nazwisko może mieć maks. ${MAX_FULL_NAME_LEN} znaków` });
+    }
     if (title !== undefined && String(title).length > MAX_TITLE_LEN) {
       return res.status(400).json({ error: `Tytuł może mieć maks. ${MAX_TITLE_LEN} znaków` });
     }
@@ -77,12 +82,13 @@ router.put('/me', requireAuth, async (req, res) => {
     if (!current) return res.status(404).json({ error: 'Nie znaleziono użytkownika' });
 
     await db.run(
-      'UPDATE users SET title = ?, bio = ?, accent_color = ?, custom_fields = ? WHERE id = ?',
+      'UPDATE users SET title = ?, bio = ?, accent_color = ?, custom_fields = ?, full_name = ? WHERE id = ?',
       [
         title !== undefined ? String(title).trim() : current.title || '',
         bio !== undefined ? String(bio).trim() : current.bio || '',
         accent_color !== undefined ? accent_color : current.accent_color || '',
         cleanFields !== undefined ? JSON.stringify(cleanFields) : current.custom_fields || '[]',
+        full_name !== undefined ? String(full_name).trim() : current.full_name || '',
         req.session.user.id,
       ]
     );

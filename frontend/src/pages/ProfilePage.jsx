@@ -4,13 +4,14 @@ import { useAuth } from '../context/AuthContext.jsx';
 const DEFAULT_COLOR = '#ff6a3d';
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const [fullName, setFullName] = useState('');
   const [title, setTitle] = useState('');
   const [bio, setBio] = useState('');
   const [color, setColor] = useState(DEFAULT_COLOR);
@@ -22,6 +23,7 @@ export default function ProfilePage() {
       .then(r => r.json())
       .then(data => {
         setProfile(data);
+        setFullName(data.full_name || '');
         setTitle(data.title || '');
         setBio(data.bio || '');
         setColor(data.accent_color || DEFAULT_COLOR);
@@ -52,15 +54,17 @@ export default function ProfilePage() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          title, bio, accent_color: color,
+          full_name: fullName, title, bio, accent_color: color,
           custom_fields: fields.filter(f => f.label.trim() && f.value.trim())
         })
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       setProfile(data);
+      setFullName(data.full_name || '');
       setFields(data.custom_fields || []);
       setSuccess('Profil zapisany!');
+      refreshUser(); // odśwież navbar i inne miejsca, żeby od razu pokazały nowe imię i nazwisko
     } catch {
       setError('Błąd połączenia');
     } finally {
@@ -96,6 +100,17 @@ export default function ProfilePage() {
         <div className="card">
           <div className="section-title">✏️ Edytuj profil</div>
           <div style={{ marginTop: '0.75rem' }}>
+            <div className="form-group">
+              <label>Imię i nazwisko</label>
+              <input
+                className="input" value={fullName} maxLength={80}
+                placeholder="np. Jan Kowalski"
+                onChange={e => setFullName(e.target.value)}
+              />
+              <span style={{ fontSize: '0.78rem', color: 'var(--text3)' }}>
+                Jeśli podasz imię i nazwisko, będzie ono widoczne w miejscu nicku wszędzie w aplikacji, a Twój nick z Discorda pojawi się mniejszą czcionką pod spodem.
+              </span>
+            </div>
             <div className="form-group">
               <label>Tytuł / przydomek (np. "Legenda Areny", "Mistrz Serwisu")</label>
               <input
@@ -168,7 +183,12 @@ export default function ProfilePage() {
           <div style={{ marginTop: '1rem', display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
             <img src={avatarUrl} alt="" style={{ width: 56, height: 56, borderRadius: '50%', border: `2px solid ${color || DEFAULT_COLOR}` }} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>{user.username}</div>
+              <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>
+                {fullName.trim() || user.username}
+              </div>
+              {fullName.trim() && (
+                <div style={{ color: 'var(--text3)', fontSize: '0.82rem' }}>{user.username}</div>
+              )}
               {title && <div style={{ color: color || DEFAULT_COLOR, fontWeight: 600, fontSize: '0.9rem', marginTop: '0.15rem' }}>{title}</div>}
               {user.is_admin && <span className="badge badge-gold" style={{ marginTop: '0.4rem', display: 'inline-block' }}>Administrator</span>}
             </div>

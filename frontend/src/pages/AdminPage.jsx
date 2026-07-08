@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTournament } from '../context/TournamentContext.jsx';
+import PlayerName from '../components/PlayerName.jsx';
 
 export default function AdminPage() {
   const { user } = useAuth();
@@ -389,7 +390,9 @@ export default function AdminPage() {
                   src={admin.avatar ? `https://cdn.discordapp.com/avatars/${admin.id}/${admin.avatar}.png` : `https://cdn.discordapp.com/embed/avatars/0.png`}
                   alt="" style={{ width: 28, height: 28, borderRadius: '50%' }}
                 />
-                <span style={{ flex: 1, fontWeight: 500 }}>{admin.username}</span>
+                <span style={{ flex: 1 }}>
+                  <PlayerName fullName={admin.full_name} username={admin.username} />
+                </span>
                 <span style={{ color: 'var(--text3)', fontSize: '0.8rem', fontFamily: 'monospace' }}>{admin.id}</span>
                 {admin.id !== user.id
                   ? <button className="btn btn-danger" style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem' }}
@@ -421,7 +424,9 @@ export default function AdminPage() {
                   <div style={{ flex: 1 }}>
                     <span style={{ fontWeight: 700 }}>{team.name}</span>
                     <span style={{ color: 'var(--text2)', fontSize: '0.85rem', marginLeft: '0.75rem' }}>
-                      Kapitan: {team.rep_username} · {accepted.length} graczy
+                      Kapitan: {team.rep_full_name?.trim()
+                        ? `${team.rep_full_name} (${team.rep_username})`
+                        : team.rep_username} · {accepted.length} graczy
                     </span>
                   </div>
                   <button
@@ -451,8 +456,12 @@ export default function AdminPage() {
                             src={member.avatar ? `https://cdn.discordapp.com/avatars/${member.id}/${member.avatar}.png` : `https://cdn.discordapp.com/embed/avatars/0.png`}
                             alt="" style={{ width: 26, height: 26, borderRadius: '50%' }}
                           />
-                          <span style={{ flex: 1, fontWeight: member.id === team.representative_id ? 600 : 400 }}>
-                            {member.username}
+                          <span style={{ flex: 1 }}>
+                            <PlayerName
+                              fullName={member.full_name}
+                              username={member.username}
+                              weight={member.id === team.representative_id ? 600 : 400}
+                            />
                           </span>
                           <span style={{ color: 'var(--text3)', fontSize: '0.78rem', fontFamily: 'monospace' }}>
                             {member.id}
@@ -462,7 +471,7 @@ export default function AdminPage() {
                             : <button
                                 className="btn btn-danger"
                                 style={{ fontSize: '0.78rem', padding: '0.2rem 0.5rem' }}
-                                onClick={() => kickFromTeam(team.id, member.id, member.username)}
+                                onClick={() => kickFromTeam(team.id, member.id, member.full_name || member.username)}
                               >
                                 Wyrzuć
                               </button>
@@ -505,7 +514,7 @@ export default function AdminPage() {
                           alt="" style={{ width: 28, height: 28, borderRadius: '50%' }}
                         />
                         <div>
-                          <div style={{ fontWeight: 500 }}>{u.username}</div>
+                          <PlayerName fullName={u.full_name} username={u.username} />
                           {u.is_admin && <div style={{ fontSize: '0.72rem', color: 'var(--gold)' }}>Administrator</div>}
                         </div>
                       </div>

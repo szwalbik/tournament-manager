@@ -14,7 +14,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const teams = await db.all(`
-      SELECT t.*, u.username as rep_username, u.avatar as rep_avatar,
+      SELECT t.*, u.username as rep_username, u.avatar as rep_avatar, u.full_name as rep_full_name,
         COUNT(CASE WHEN tm.status = 'accepted' THEN 1 END) as member_count
       FROM teams t
       JOIN users u ON t.representative_id = u.id
@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
     `);
     const teamsWithMembers = await Promise.all(teams.map(async team => {
       const members = await db.all(`
-        SELECT u.id, u.username, u.avatar, tm.status
+        SELECT u.id, u.username, u.avatar, u.full_name, tm.status
         FROM team_members tm
         JOIN users u ON tm.user_id = u.id
         WHERE tm.team_id = ?

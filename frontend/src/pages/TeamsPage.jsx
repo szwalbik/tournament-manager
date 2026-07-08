@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useTournament } from '../context/TournamentContext.jsx';
+import PlayerName from '../components/PlayerName.jsx';
 
 export default function TeamsPage() {
   const { user } = useAuth();
@@ -189,7 +190,9 @@ export default function TeamsPage() {
                     src={team.rep_avatar ? `https://cdn.discordapp.com/avatars/${team.representative_id}/${team.rep_avatar}.png` : `https://cdn.discordapp.com/embed/avatars/0.png`}
                     alt="" style={{ width: 28, height: 28, borderRadius: '50%' }}
                   />
-                  <span style={{ flex: 1, fontWeight: 600 }}>{team.name}</span>
+                  <span style={{ flex: 1 }}>
+                    <PlayerName fullName={team.rep_full_name} username={team.name} weight={600} />
+                  </span>
                   {team.representative_id === user?.id && <span className="badge badge-blue">To Ty</span>}
                 </div>
               ))}
@@ -265,7 +268,9 @@ export default function TeamsPage() {
                       src={member.avatar ? `https://cdn.discordapp.com/avatars/${member.id}/${member.avatar}.png` : `https://cdn.discordapp.com/embed/avatars/0.png`}
                       alt="" style={{ width: 28, height: 28, borderRadius: '50%' }}
                     />
-                    <span style={{ flex: 1, fontWeight: 500 }}>{member.username}</span>
+                    <span style={{ flex: 1 }}>
+                      <PlayerName fullName={member.full_name} username={member.username} />
+                    </span>
                     <button className="btn btn-success" style={{ padding: '0.3rem 0.7rem' }}
                       onClick={() => respondToJoin(myRepTeam.id, member.id, 'accept')}>
                       ✓ Akceptuj
@@ -296,8 +301,12 @@ export default function TeamsPage() {
                     src={member.avatar ? `https://cdn.discordapp.com/avatars/${member.id}/${member.avatar}.png` : `https://cdn.discordapp.com/embed/avatars/0.png`}
                     alt="" style={{ width: 28, height: 28, borderRadius: '50%' }}
                   />
-                  <span style={{ flex: 1, fontWeight: member.id === myTeam.representative_id ? 600 : 400 }}>
-                    {member.username}
+                  <span style={{ flex: 1 }}>
+                    <PlayerName
+                      fullName={member.full_name}
+                      username={member.username}
+                      weight={member.id === myTeam.representative_id ? 600 : 400}
+                    />
                   </span>
                   {member.id === myTeam.representative_id && (
                     <span className="badge badge-gold">Kapitan</span>
@@ -307,7 +316,7 @@ export default function TeamsPage() {
                     <button
                       className="btn btn-danger"
                       style={{ padding: '0.2rem 0.6rem', fontSize: '0.78rem' }}
-                      onClick={() => kickMember(myTeam.id, member.id, member.username)}
+                      onClick={() => kickMember(myTeam.id, member.id, member.full_name || member.username)}
                     >
                       Wyrzuć
                     </button>
@@ -345,7 +354,9 @@ export default function TeamsPage() {
                     <div style={{ flex: 1 }}>
                       <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>{team.name}</div>
                       <div style={{ color: 'var(--text2)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                        Kapitan: {team.rep_username} · {team.member_count} {team.member_count === 1 ? 'gracz' : 'graczy'}
+                        Kapitan: {team.rep_full_name?.trim()
+                          ? `${team.rep_full_name} (${team.rep_username})`
+                          : team.rep_username} · {team.member_count} {team.member_count === 1 ? 'gracz' : 'graczy'}
                       </div>
                       {/* Avatary członków */}
                       {acceptedMembers.length > 0 && (
@@ -354,8 +365,8 @@ export default function TeamsPage() {
                             <img
                               key={m.id}
                               src={m.avatar ? `https://cdn.discordapp.com/avatars/${m.id}/${m.avatar}.png` : `https://cdn.discordapp.com/embed/avatars/0.png`}
-                              alt={m.username}
-                              title={m.username}
+                              alt={m.full_name || m.username}
+                              title={m.full_name ? `${m.full_name} (${m.username})` : m.username}
                               style={{ width: 24, height: 24, borderRadius: '50%', border: '2px solid var(--bg2)' }}
                             />
                           ))}

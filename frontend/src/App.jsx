@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 import { TournamentProvider, useTournament } from './context/TournamentContext.jsx';
+import PlayerName from './components/PlayerName.jsx';
 import HomePage from './pages/HomePage.jsx';
 import TeamsPage from './pages/TeamsPage.jsx';
 import BracketPage from './pages/BracketPage.jsx';
@@ -35,7 +36,12 @@ function NavBar() {
         {user ? (
           <div className="user-info">
             <img src={avatarUrl} alt="" className="user-avatar" />
-            <span className="user-name" style={user.accent_color ? { color: user.accent_color } : undefined}>{user.username}</span>
+            <PlayerName
+              className="user-name"
+              fullName={user.full_name}
+              username={user.username}
+              color={user.accent_color || undefined}
+            />
             {user.is_admin && <span className="admin-badge">ADMIN</span>}
             <button onClick={logout} className="btn-logout">Wyloguj</button>
           </div>
